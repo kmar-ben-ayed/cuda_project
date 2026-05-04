@@ -1,0 +1,9 @@
+Compile float version: nvcc -O2 -o matmul_float matmul.cu
+Compile int   version: nvcc -O2 -DUSE_INT -o matmul_int matmul.cu
+
+Compile: nvcc -O2 -o cublas_matmul part2_cublas.cu -lcublas
+
+
+Compile: nvcc -O2 -arch=sm_86 -o tc_matmul part2_tensorcore.cu -lcublas
+
+compile: nvcc -O2 -o nn_reduction part3_nn_reduction.cu
