@@ -1,5 +1,5 @@
 // Two kernels: matmulRowX (row-major X) and matmulRowY (row-major Y)
-
+#include <cuda_runtime.h>
 #include <algorithm>
 #include <cassert>
 #include <cstdlib>
