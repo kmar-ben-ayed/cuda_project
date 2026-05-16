@@ -1,5 +1,5 @@
 // Two kernels: matmulRowX (row-major X) and matmulRowY (row-major Y)
-
+#include <cuda_runtime.h>
 #include <algorithm>
 #include <cassert>
 #include <cstdlib>
@@ -25,7 +25,7 @@ __global__ void matmulRowX(const dtype* __restrict__ A,
 {
     int row = blockIdx.x * blockDim.x + threadIdx.x;
     int col = blockIdx.y * blockDim.y + threadIdx.y;
-
+    if (row >= N || col >= N) return;
     dtype acc = 0;
     for (int k = 0; k < N; ++k)
         acc += A[row * N + k] * B[k * N + col];
@@ -41,6 +41,7 @@ __global__ void matmulRowY(const dtype* __restrict__ A,
 {
     int row = blockIdx.y * blockDim.y + threadIdx.y;
     int col = blockIdx.x * blockDim.x + threadIdx.x;
+    if (row >= N || col >= N) return;
 
     dtype acc = 0;
     for (int k = 0; k < N; ++k)
@@ -90,11 +91,15 @@ void runKernel(bool useRowX,
     else
         matmulRowY<<<grid, block>>>(d_A, d_B, d_C, N);
 
+    cudaError_t err = cudaGetLastError();
+    if (err != cudaSuccess) {
+        printf("Kernel launch error: %s\n", cudaGetErrorString(err));
+        return;
+    }
     cudaEventRecord(ev2);
 
     // D2H
     cudaMemcpy(h_C.data(), d_C, bytes, cudaMemcpyDeviceToHost);
-    cudaDeviceSynchronize();
     cudaEventRecord(ev3);
     cudaEventSynchronize(ev3);
 
@@ -123,23 +128,26 @@ int main()
     const int N      = 8192;
     const size_t SZ  = (size_t)N * N * sizeof(dtype);
 
-    cout << "Matrix size: " << N << "x" << N
-         << "  Type chosen: " << TYPE_NAME << endl;
-
+     cout << "Matrix size: " << N << "x" << N
+         << "  Type: " << TYPE_NAME << "\n";
     vector<dtype> h_A(N * N), h_B(N * N), h_C(N * N);
     std::generate(h_A.begin(), h_A.end(), []{ return (dtype)(rand() % 100); });
     std::generate(h_B.begin(), h_B.end(), []{ return (dtype)(rand() % 100); });
 
     dtype *d_A, *d_B, *d_C;
-    cudaMalloc(&d_A, SZ);
-    cudaMalloc(&d_B, SZ);
-    cudaMalloc(&d_C, SZ);
+    cudaError_t err;
+    err = cudaMalloc(&d_A, SZ);
+    if (err != cudaSuccess) { printf("cudaMalloc A failed: %s\n", cudaGetErrorString(err)); return 1; }
+    err = cudaMalloc(&d_B, SZ);
+    if (err != cudaSuccess) { printf("cudaMalloc B failed: %s\n", cudaGetErrorString(err)); return 1; }
+    err = cudaMalloc(&d_C, SZ);
+    if (err != cudaSuccess) { printf("cudaMalloc C failed: %s\n", cudaGetErrorString(err)); return 1; }
+
 
     runKernel(true,  d_A, d_B, d_C, N, SZ, h_A, h_B, h_C);   // matmulRowX
     runKernel(false, d_A, d_B, d_C, N, SZ, h_A, h_B, h_C);   // matmulRowY
 
     cudaFree(d_A); cudaFree(d_B); cudaFree(d_C);
-    cout <<endl;
-    cout << "Done." << endl;
+    cout << "\nDone.\n";
     return 0;
 }

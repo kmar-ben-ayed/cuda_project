@@ -20,7 +20,7 @@
         }                                                                  \
     } while (0)
 
-static inline float sigmoid(float x) { return 1.0f / (1.0f + expf(-x)); }
+static __device__  inline float sigmoid(float x) { return 1.0f / (1.0f + expf(-x)); }
 
 //  KERNELS 
 
@@ -35,14 +35,15 @@ __global__ void naiveRowSumSigmoid(const float* __restrict__ xw,
 
     int tid = threadIdx.x;
     int row = blockIdx.x;                       // one block per hidden neuron
-    int gid = row * rowLen + tid;
-
-    sdata[tid] = (tid < rowLen) ? xw[gid] : 0.0f;
+    float acc = 0.0f;
+    for (int i = tid; i < rowLen; i += blockDim.x)
+        acc += xw[row * rowLen + i];
+    sdata[tid] = acc;
     __syncthreads();
 
-    // Naive tree: stride doubles, only tid % (2*stride)==0 active
+    // Naive tree
     for (int stride = 1; stride < blockDim.x; stride <<= 1) {
-        if (tid % (2 * stride) == 0)
+        if (tid % (2 * stride) == 0 && tid + stride < blockDim.x)
             sdata[tid] += sdata[tid + stride];
         __syncthreads();
     }
@@ -52,9 +53,6 @@ __global__ void naiveRowSumSigmoid(const float* __restrict__ xw,
 }
 
 // [3-2 Improvement 1] Interleaved addressing (no divergence)
-//   Replace tid%(2*stride)==0 with a sequential index.
-//   All active threads have consecutive TIDs → same warp,
-//   no divergence within a warp.
 __global__ void improvedRowSumSigmoid_v1(const float* __restrict__ xw,
                                          float*       __restrict__ h,
                                          int rowLen)
@@ -63,9 +61,14 @@ __global__ void improvedRowSumSigmoid_v1(const float* __restrict__ xw,
 
     int tid = threadIdx.x;
     int row = blockIdx.x;
-    int gid = row * rowLen + tid;
+    int base = row * rowLen;
 
-    sdata[tid] = (tid < rowLen) ? xw[gid] : 0.0f;
+    float acc = 0.0f;
+
+    for (int i = tid; i < rowLen; i += blockDim.x)
+        acc += xw[base + i];
+
+    sdata[tid] = acc;
     __syncthreads();
 
     // Interleaved: active threads are 0..blockDim.x/(2*stride)-1

@@ -121,7 +121,7 @@ int main()
     //  Kernel launch 
     // 128 threads per block, arranged as 4×32: 4 warps each owning one 16×16 tile
     // Each block covers TILE_M × TILE_N output
-    dim3 block(128, 1);
+    dim3 block(128, 4);
     dim3 grid((N + TILE_N - 1) / TILE_N, (M + TILE_M - 1) / TILE_M);
 
     tcMatmul<<<grid, block>>>(d_Ah, d_Bh, d_C, M, N, K);
