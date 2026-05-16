@@ -42,9 +42,7 @@ __global__ void naiveRowSumSigmoid(const float* __restrict__ xw,
     __syncthreads();
 
     // Naive tree
-    // Naive tree
     for (int stride = 1; stride < blockDim.x; stride <<= 1) {
-        if (tid % (2 * stride) == 0 && tid + stride < blockDim.x)
         if (tid % (2 * stride) == 0 && tid + stride < blockDim.x)
             sdata[tid] += sdata[tid + stride];
         __syncthreads();
@@ -64,19 +62,11 @@ __global__ void improvedRowSumSigmoid_v1(const float* __restrict__ xw,
     int tid = threadIdx.x;
     int row = blockIdx.x;
     int base = row * rowLen;
-
-    float acc = 0.0f;
-
-    for (int i = tid; i < rowLen; i += blockDim.x)
-        acc += xw[base + i];
-    int base = row * rowLen;
-
     float acc = 0.0f;
 
     for (int i = tid; i < rowLen; i += blockDim.x)
         acc += xw[base + i];
 
-    sdata[tid] = acc;
     sdata[tid] = acc;
     __syncthreads();
 
